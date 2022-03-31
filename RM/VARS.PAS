@@ -10,6 +10,8 @@ Const
    ProgramName = 'Raster Master v3.8';
    CopyRight1  = '(c) Copyright 1991-2022 By '+CompanyName+'.';
    CopyRight2  = 'All Rights Reserved.';
+   GitHub1     = 'Get source and latest version from github:';
+   GitHub2     = 'https://github.com/RetroNick2020';
 
    TPLan   = 1;
    TCLan   = 2;

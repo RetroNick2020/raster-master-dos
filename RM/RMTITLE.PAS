@@ -34,6 +34,10 @@ Procedure EndTitle;
 begin
   Writeln(ProgramName);
   Writeln(CopyRight1+'  '+Copyright2);
+  Writeln;
+  Writeln(GitHub1);
+  Writeln(GitHub2);
+  Writeln;
 end;
 
 Procedure StartMenu(x,y : word);
