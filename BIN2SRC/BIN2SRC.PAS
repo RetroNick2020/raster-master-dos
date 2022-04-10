@@ -20,6 +20,9 @@ var
    infile,outfile : String;
    lanStr,formStr : String;
    varname        : String;
+   LineNumber     : Word;
+   LineSteps      : Word;
+   BasicLineMode  : Boolean;
 
 Function ValidFormat : Boolean;
 begin
@@ -84,6 +87,21 @@ begin
  Inc(NextByte);
 End;
 
+Function GetNextLineNumberStr : string;
+var
+ TStr  : String;
+begin
+ TStr:='';
+ If BasicLineMode then
+ begin
+   Str(LineNumber,TStr);
+   TStr:=TStr+' ';
+   inc(LineNumber,LineSteps);
+ end;
+ GetNextLineNumberStr:=TStr;
+end;
+
+
 Procedure BinToSrc(Format,Lantype : Word);
 Var
  F        : file;
@@ -129,14 +147,14 @@ begin
    begin
    Case LanType of pascallan:WriteLn(FT,varname,' : Array[1..',Count,'] of Byte = (');
                         clan:writeln(FT,'char ',varname,'[',count,'] = {');
-                   basiclan :Writeln(FT,'REM   ',varname,', Data Count = ',count);
+                   basiclan :Writeln(FT,GetNextLineNumberStr,'REM   ',varname,', Data Count = ',count);
    end;
    end
    else
    begin
      Case LanType of pascallan:WriteLn(FT,varname,' : Array[1..',Count,'] of Word = (');
                           clan:writeln(FT,'int ',varname,'[',count,'] = {');
-                     basiclan :Writeln(FT,'REM   ',varname,', Data Count = ',count);
+                     basiclan :Writeln(FT,GetNextLineNumberStr,'REM   ',varname,', Data Count = ',count);
      end;
    end;
    Cpl:=1;
@@ -146,7 +164,7 @@ begin
    end
    else
    begin
-     write(FT,'DATA  ');
+     write(FT,GetNextLineNumberStr,'DATA  ');
    end;
    For i:=1 to Count-1 do
    begin
@@ -180,7 +198,7 @@ begin
         else
         begin
           writeln(FT);
-          write(FT,'DATA  ');
+          write(FT,GetNextLineNumberStr,'DATA  ');
         end;
       end
       else
@@ -218,22 +236,79 @@ begin
   Close(F);
 end;
 
+Procedure CheckForLineNumbers;
+var
+ LineSwitch : string;
+ TempStr    : string;
+ Error      : integer;
+ SPos       : integer;
+ TLine,TSteps : word;
+ StepStr   : String;
+ LineStr   : String;
+begin
+ BasicLineMode:=False;
+ LineNumber:=1000;
+ LineSteps:=10;
+ LineSwitch:=ParamStr(5);
+ StrToUp(LineSwitch);
+ if Copy(LineSwitch,1,6)='/LINES' then
+ begin
+   BasicLineMode:=True;
+   Delete(LineSwitch,1,6);
+   if (Length(LineSwitch) > 0) and (LineSwitch[1]=':') then
+   begin
+      Delete(LineSwitch,1,1); (* get rid of first ':' *)
+   end;
+
+   StepStr:='10';
+   LineStr:='1000';
+   SPos:=POS(':',LineSwitch);
+   if SPos > 0 then  (* we have lines and steps*)
+   begin
+     LineStr:=Copy(LineSwitch,1,SPos-1);
+     Delete(LineSwitch,1,SPos);
+     StepStr:=LineSwitch;
+   end
+   else
+   begin   (* we only lines *)
+     LineStr:=LineSwitch;
+   end;
+
+   Val(LineStr,TLine,Error);
+   if (TLine > 0)  then
+   begin
+     LineNumber:=TLine;
+   end;
+
+   Val(StepStr,TSteps,Error);
+   if (TSteps > 0) then
+   begin
+     LineSteps:=TSteps;
+   end;
+
+ end;
+end;
+
+
 Procedure PrintHelp;
 begin
-   writeln('BIN2SRC v1.2');
+   writeln('BIN2SRC v1.3');
    writeln('(c) Copyright 1993-2022 By RetroNick. All Rights Reserved.');
    writeln;
    writeln(GitHub1);
    writeln(GitHub2);
    writeln;
 
-   writeln('Usage: Bin2Src <input file> <output file> /format /language');
+   writeln('Usage: Bin2Src <input file> <output file> /format /language /lines:start:steps');
    writeln;
    writeln('       format /b = byte format     language /c    = c language');
-   writeln('              /w = word format     language /bas  = basic language');
+   writeln('              /w = word format     language /bas  = basic languages');
    writeln('                                   language /pas  = pascal language');
    writeln;
    writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /c');
+   writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /bas /lines:1000:20');
+   writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /pas');
+
 end;
 begin
  if ParamCount < 4 then
@@ -260,6 +335,7 @@ begin
   halt;
  end;
 
+
  if lanStr='/C' then
  begin
     if formStr='/B' then
@@ -273,6 +349,8 @@ begin
   end
   else  if lanStr='/BAS' then
  begin
+    CheckForLineNumbers;
+
     if formStr='/B' then
     begin
       binTosrc(1,BasicLan);
