@@ -27,7 +27,7 @@ var
 Function ValidFormat : Boolean;
 begin
   ValidFormat:=FALSE;
-  if ((formStr='/B') or (formStr='/W')) AND ((lanStr='/C') or (lanStr='/BAS') or (lanStr='/PAS')) then
+  if ((formStr='/B') or (formStr='/W')) AND ((lanStr='/C') or (lanStr='/BAS') or (lanStr='/BAS2') or (lanStr='/PAS')) then
   begin
     ValidFormat:=TRUE;
   end;
@@ -102,7 +102,7 @@ begin
 end;
 
 
-Procedure BinToSrc(Format,Lantype : Word);
+Procedure BinToSrc(Format,Lantype,DataOrVariable : Word); (* DataOrVariable for basic only as option*)
 Var
  F        : file;
  FT       : Text;
@@ -113,7 +113,17 @@ Var
  cpL      : Word;
  tempStr  : String;
  error    : Word;
+ DataStr  : String;
+ HexFormat : String;
 begin
+ DataStr:='DATA ';
+ if DataOrVariable = 1 then DataStr:='';
+ Case LanType of BasicLan :HexFormat:='&H';
+                 Clan     :HexFormat:='0x';
+                 PascalLan:HexFormat:='$';
+ End;
+
+
 {$I-}
    Assign(F,infile);
    Reset(F,1);
@@ -135,11 +145,13 @@ begin
    Case Format of 1:begin
                       Count:=nb; (* dump file in byte array *)
                       vpl:=14;
+                      if DataOrVariable = 1 then vpl:=3;
                     end;
     else             (* dump file in word format *)
     begin
       Count:=(nb+1) DIV 2;
       vpl:=10;
+      if DataOrVariable = 1 then vpl:=5;
     end;
    end;
 
@@ -164,29 +176,46 @@ begin
    end
    else
    begin
-     write(FT,GetNextLineNumberStr,'DATA  ');
+     write(FT,GetNextLineNumberStr,DataStr);
+     if (format=1) and (DataOrVariable = 1) then Write(FT,varname,'$="":');
+
    end;
    For i:=1 to Count-1 do
    begin
       if Format = 1 then
       begin
          Temp:=ReadByte(F);
-        Case LanType of BasicLan :write(FT,'&H');
-                        Clan     :write(FT,'0x');
-                        PascalLan:Write(FT,'$');
-        End;
-         write(FT,byte2hex(temp));
+         if DataOrVariable = 1 then
+         begin
+           Write(FT,varname,'$=',varname,'$+CHR$(');
+           Write(FT,HexFormat);
+           Write(FT,byte2hex(temp));
+           Write(FT,')');
+         end
+         else
+         begin
+           Write(FT,HexFormat);
+           Write(FT,byte2hex(temp));
+         end;
       end
       else
       begin
         Temp:=ReadByte(f) SHL 8;
         Inc(Temp,ReadByte(f));
-        Case LanType of BasicLan :write(FT,'&H');
-                        Clan     :write(FT,'0x');
-                        PascalLan:Write(FT,'$');
-        End;
+
+       if DataOrVariable = 1 then
+       begin
+         Write(FT,varname,'%(',i-1,')=');
+         Write(FT,HexFormat);
+         Write(FT,word2hex(temp));
+       end
+       else
+       begin
+        Write(FT,HexFormat);
         write(FT,word2hex(temp));
+       end;
       end;
+
       if cpl = vpl then
       begin
         cpl:=0;
@@ -198,39 +227,58 @@ begin
         else
         begin
           writeln(FT);
-          write(FT,GetNextLineNumberStr,'DATA  ');
+          write(FT,GetNextLineNumberStr,DataStr);
         end;
       end
       else
       begin
-          write(FT,',');
+          if DataOrVariable = 1 then
+          begin
+            write(FT,':');
+           end
+          else
+          begin
+            write(FT,',');
+          end;
       end;
       inc(cpl);
    end;
 
    if Format = 1 then
    begin
-       Temp:=ReadByte(F);
-        Case LanType of BasicLan :write(FT,'&H');
-                        Clan     :write(FT,'0x');
-                        PascalLan:Write(FT,'$');
-        End;
-       write(FT,byte2hex(temp));
+       if DataOrVariable = 1 then
+       begin
+         Write(FT,varname,'$=',varname,'$+CHR$(');
+         Write(FT,HexFormat);
+         Write(FT,byte2hex(temp));
+         Write(FT,')');
+       end
+       else
+       begin
+        Temp:=ReadByte(F);
+        Write(FT,HexFormat);
+        Write(FT,byte2hex(temp));
+      end;
    end
    else
    begin
-       Temp:=ReadByte(f) SHL 8;
-       Inc(Temp,ReadByte(f));
-       Case LanType of BasicLan :write(FT,'&H');
-                        Clan     :write(FT,'0x');
-                        PascalLan:Write(FT,'$');
-        End;
-      write(FT,word2hex(temp));
+     Temp:=ReadByte(f) SHL 8;
+     Inc(Temp,ReadByte(f));
+     if DataOrVariable = 1 then
+     begin
+       Write(FT,varname,'%(',i,')=');
+       Write(FT,HexFormat);
+       Write(FT,word2hex(temp));
+     end
+     else
+     begin
+        Write(FT,HexFormat);
+        Write(FT,word2hex(temp));
+     end;
    end;
-  case LanType of pascalLan: write(FT,');');
-                       clan: Write(FT,'};');
-
-  end;
+   case LanType of pascalLan: Write(FT,');');
+                        clan: Write(FT,'};');
+   end;
   writeln(FT);
   CLOSE(FT);
   Close(F);
@@ -292,7 +340,7 @@ end;
 
 Procedure PrintHelp;
 begin
-   writeln('BIN2SRC v1.3');
+   writeln('BIN2SRC v1.4');
    writeln('(c) Copyright 1993-2022 By RetroNick. All Rights Reserved.');
    writeln;
    writeln(GitHub1);
@@ -301,15 +349,22 @@ begin
 
    writeln('Usage: Bin2Src <input file> <output file> /format /language /lines:start:steps');
    writeln;
-   writeln('       format /b = byte format     language /c    = c language');
-   writeln('              /w = word format     language /bas  = basic languages');
-   writeln('                                   language /pas  = pascal language');
+   writeln('  format /b = byte format  language /c    = c');
+   writeln('         /w = word format  language /bas  = basic DATA Statetents');
+   writeln('                           language /bas2 = basic Variable assignment');
+   writeln('                           language /pas  = pascal language');
    writeln;
    writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /c');
    writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /bas /lines:1000:20');
+   writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /bas2');
    writeln('       eg. BIN2SRC TGCAR.XGF TGCAR.C /b /pas');
 
 end;
+
+var
+ DataOrVairable : word;
+
+
 begin
  if ParamCount < 4 then
  begin
@@ -335,40 +390,40 @@ begin
   halt;
  end;
 
-
+ DataOrVairable:=0;
  if lanStr='/C' then
  begin
     if formStr='/B' then
     begin
-      binTosrc(1,Clan);
+      binTosrc(1,Clan,0);
     end
     else
     begin
-      binTosrc(2,Clan);
+      binTosrc(2,Clan,0);
     end;
   end
-  else  if lanStr='/BAS' then
+  else  if (lanStr='/BAS') OR (lanStr='/BAS2') then
  begin
     CheckForLineNumbers;
-
+    if LanStr='/BAS2' then DataOrVairable:=1;
     if formStr='/B' then
     begin
-      binTosrc(1,BasicLan);
+      binTosrc(1,BasicLan,DataOrVairable);
     end
     else
     begin
-      binTosrc(2,BasicLan);
+      binTosrc(2,BasicLan,DataOrVairable);
     end;
   end
   else  if lanStr='/PAS' then
  begin
     if formStr='/B' then
     begin
-      binTosrc(1,PascalLan);
+      binTosrc(1,PascalLan,0);
     end
     else
     begin
-      binTosrc(2,PascalLan);
+      binTosrc(2,PascalLan,0);
     end;
   end;
 
